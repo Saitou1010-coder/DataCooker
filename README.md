@@ -49,3 +49,4 @@ Kiem tra `/health` khong can khoa. Endpoint `/run` bat buoc co Bearer secret.
 
 Worker khong ghi Cookie vao log, response hoac bang snapshot. Session chi duoc
 giai ma trong bo nho trong luc xu ly job.
+
