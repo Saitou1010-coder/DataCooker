@@ -1,0 +1,22 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "datacooker-tiktok-bs-sync",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-25",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "upload_source_maps": true,
+  "browser": {
+    "binding": "BROWSER"
+  },
+  "triggers": {
+    "crons": ["* * * * *"]
+  },
+  "vars": {
+    "WORKER_ID": "cloudflare-browser-run",
+    "TIKTOK_BS_ID_MAP": "{}"
+  },
+  "observability": {
+    "enabled": true
+  }
+}
