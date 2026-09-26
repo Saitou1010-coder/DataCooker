@@ -14,8 +14,8 @@ interface Env {
 let db: any;
 let workerId = 'cloudflare-browser-run';
 let encryptionKey = '';
-const JOB_TIMEOUT_MS = 100_000;
-const STALE_JOB_MS = 4 * 60_000;
+const JOB_TIMEOUT_MS = 25_000;
+const STALE_JOB_MS = 2 * 60_000;
 let bsIdMap = '{}';
 let browserBinding: BrowserWorker;
 
