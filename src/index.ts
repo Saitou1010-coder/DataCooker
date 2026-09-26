@@ -14,6 +14,8 @@ interface Env {
 let db: any;
 let workerId = 'cloudflare-browser-run';
 let encryptionKey = '';
+const JOB_TIMEOUT_MS = 100_000;
+const STALE_JOB_MS = 4 * 60_000;
 let bsIdMap = '{}';
 let browserBinding: BrowserWorker;
 
@@ -159,6 +161,14 @@ async function handleFacebookProxy(request: Request) {
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function withTimeout(promise, timeoutMs, message) {
+  let timeoutId;
+  const timeout = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
 }
 
 function base64Bytes(value) {
@@ -614,8 +624,25 @@ async function failJob(job, error) {
   }).eq('id', job.connection_id).eq('user_id', job.user_id);
 }
 
+async function recoverStaleJobs() {
+  const staleBefore = new Date(Date.now() - STALE_JOB_MS).toISOString();
+  const now = new Date().toISOString();
+  const { error } = await db.from('tiktok_bs_sync_jobs').update({
+    status: 'pending',
+    available_at: now,
+    locked_at: null,
+    locked_by: null,
+    error_message: 'Previous Browser Run timed out and was queued again.',
+    started_at: null,
+    finished_at: null,
+    updated_at: now
+  }).eq('status', 'processing').lt('locked_at', staleBefore);
+  if (error) throw new Error(`Could not recover stale jobs: ${error.message}`);
+}
+
 async function runOneJob(env: Env) {
   configure(env);
+  await recoverStaleJobs();
   const { data, error } = await db.rpc('dc_claim_tiktok_bs_sync_job', {
     p_worker: workerId
   });
@@ -624,7 +651,11 @@ async function runOneJob(env: Env) {
   if (!job) return { ok: true, claimed: false };
 
   try {
-    const result = await runJob(job);
+    const result = await withTimeout(
+      runJob(job),
+      JOB_TIMEOUT_MS,
+      `TikTok Browser Run exceeded ${JOB_TIMEOUT_MS / 1000} seconds.`
+    );
     await finishJob(job, result);
     return { ok: true, claimed: true, jobId: job.id, result };
   } catch (error) {
