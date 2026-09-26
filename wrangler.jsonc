@@ -13,6 +13,7 @@
     "crons": ["* * * * *"]
   },
   "vars": {
+    "SUPABASE_URL": "https://uzycjdnivcfnfpjcpubi.supabase.co",
     "WORKER_ID": "cloudflare-browser-run",
     "TIKTOK_BS_ID_MAP": "{}"
   },
