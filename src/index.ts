@@ -14,6 +14,8 @@ interface Env {
 let db: any;
 let workerId = 'cloudflare-browser-run';
 let encryptionKey = '';
+// Scheduled events get only a short grace period after the handler returns.
+// Finish or fail the job before Cloudflare terminates the invocation silently.
 const JOB_TIMEOUT_MS = 25_000;
 const STALE_JOB_MS = 2 * 60_000;
 let bsIdMap = '{}';
@@ -323,9 +325,9 @@ async function discover(context, page, connection) {
   const bcId = encodeURIComponent(String(connection.business_center_id));
   await page.goto(
     `https://business-suite.tiktok.com/insight/overview?org_id=${bcId}`,
-    { waitUntil: 'domcontentloaded', timeout: 45000 }
+    { waitUntil: 'domcontentloaded', timeout: 10000 }
   );
-  await page.waitForTimeout(12000);
+  await page.waitForTimeout(3500);
 
   const state = await page.evaluate(() => {
     const result = { localStorage: {}, sessionStorage: {}, html: '' };
@@ -337,7 +339,7 @@ async function discover(context, page, connection) {
       const key = sessionStorage.key(i);
       if (key) result.sessionStorage[key] = sessionStorage.getItem(key);
     }
-    result.html = document.documentElement.outerHTML.slice(0, 4_000_000);
+    result.html = document.documentElement.outerHTML.slice(0, 1_000_000);
     return result;
   });
   collectIds(state, bsIds);
@@ -358,11 +360,21 @@ async function discover(context, page, connection) {
 
 async function browserJson(page, url, init = {}) {
   return page.evaluate(async ({ url, init }) => {
-    const response = await fetch(url, { credentials: 'include', ...init });
-    const text = await response.text();
-    let body;
-    try { body = JSON.parse(text); } catch { body = null; }
-    return { ok: response.ok, status: response.status, body };
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    try {
+      const response = await fetch(url, {
+        credentials: 'include',
+        ...init,
+        signal: controller.signal
+      });
+      const text = await response.text();
+      let body;
+      try { body = JSON.parse(text); } catch { body = null; }
+      return { ok: response.ok, status: response.status, body };
+    } finally {
+      clearTimeout(timeout);
+    }
   }, { url, init });
 }
 
