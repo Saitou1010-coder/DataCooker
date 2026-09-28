@@ -68,19 +68,25 @@ function facebookBinding(request: Request, state: string) {
   return /^[a-f0-9]{64}$/.test(value) ? value : '';
 }
 
-function facebookLanding(target: string, state: string, headers: Headers) {
+function facebookLanding(
+  target: string,
+  state: string,
+  headers: Headers
+) {
   const nonce = crypto.randomUUID().replaceAll('-', '');
+
   headers.set('Content-Type', 'text/html; charset=utf-8');
+
   headers.set(
- headers.set(
-  'Content-Security-Policy',
-  `default-src 'none'; script-src 'nonce-${nonce}'; connect-src 'self'; ` +
-    "style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'"
-);
+    'Content-Security-Policy',
+    `default-src 'none'; script-src 'nonce-${nonce}'; connect-src 'self'; ` +
+      "style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'"
   );
+
   const safeTarget = JSON.stringify(target).replaceAll('<', '\\u003c');
+
   return new Response(
-    `<!doctype html><html lang="vi"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Kết nối DataCooker</title><style>body{font:16px system-ui;color:#17213d;padding:36px;line-height:1.6}h1{color:#5543dc}button{padding:12px;background:#5543dc;color:white;border:0;border-radius:8px;cursor:pointer}</style><h1>Kết nối Facebook</h1><p id="status">Đang kiểm tra phiên trình duyệt...</p><button id="continue" hidden>Tiếp tục với Facebook</button><noscript>Hãy bật JavaScript để kiểm tra phiên kết nối.</noscript><script nonce="${nonce}">const button=document.getElementById('continue');fetch('/auth/facebook/session-check?state=${state}',{credentials:'same-origin',cache:'no-store'}).then(r=>{if(!r.ok)throw Error();return r.json()}).then(s=>{if(!s.ok)throw Error();document.getElementById('status').textContent='Phiên đã sẵn sàng. Bấm nút bên dưới để cấp quyền.';button.hidden=false;button.onclick=()=>location.replace(${safeTarget});}).catch(()=>{document.getElementById('status').textContent='Trình duyệt chưa lưu được cookie cho datacooker.io.vn. Cho phép cookie của trang này rồi đóng cửa sổ và tạo kết nối mới từ Sidebar.';});</script></html>`,
+    `<!doctype html><html lang="vi"><meta charset="utf-8"><title>Kết nối DataCooker</title><h1>Kết nối Facebook</h1><script nonce="${nonce}">location.replace(${safeTarget});</script></html>`,
     { status: 200, headers }
   );
 }
