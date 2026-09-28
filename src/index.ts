@@ -72,14 +72,11 @@ function facebookLanding(target: string, state: string, headers: Headers) {
   const nonce = crypto.randomUUID().replaceAll('-', '');
   headers.set('Content-Type', 'text/html; charset=utf-8');
   headers.set(
-  'Content-Security-Policy':
-  "default-src 'self'; " +
-  "script-src 'self' 'unsafe-inline' https://bzrcdn.openai.com; " +
-  "connect-src 'self' https://bzr.openai.com; " +
-  "style-src 'self' 'unsafe-inline'; " +
-  "img-src 'self' data:; " +
-  "frame-ancestors 'none'; " +
-  "base-uri 'none'"
+ headers.set(
+  'Content-Security-Policy',
+  `default-src 'none'; script-src 'nonce-${nonce}'; connect-src 'self'; ` +
+    "style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'"
+);
   );
   const safeTarget = JSON.stringify(target).replaceAll('<', '\\u003c');
   return new Response(
@@ -803,44 +800,66 @@ export default {
       return Response.json({ ok: true, service: 'datacooker-tiktok-bs-sync' });
     }
     if (url.pathname === '/' && request.method === 'GET') {
-      return new Response(
-        `<!doctype html><html lang="vi"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DataCooker</title><style>body{font:18px system-ui;background:#f3f5fc;color:#18213b;margin:0;padding:10vh 8vw}main{max-width:720px;margin:auto;background:white;padding:48px;border-radius:20px}h1{color:#5141df}p{line-height:1.7}</style><main><h1>DataCooker</h1><h2>Dữ liệu Facebook trong Google Sheets</h2><p>Mở Sidebar DataCooker trong Google Sheets, chọn <strong>Kết nối / cấp quyền lại Facebook</strong> để kết nối đúng tài khoản DataCooker của bạn.</p><p>Sau khi bạn xác nhận quyền trên Facebook, hệ thống tự nhận và lưu token. Bạn không cần sao chép token thủ công.</p></main></html>`,
-       <script>
-  (function (w, d, s, u) {
-    if (w.oaiq) return;
-    var q = function () { q.q.push(arguments); };
-    q.q = [];
-    w.oaiq = q;
+  return new Response(
+    `<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>DataCooker</title>
 
-    var js = d.createElement(s);
-    js.async = true;
-    js.src = u;
+  <script>
+    (function (w, d, s, u) {
+      if (w.oaiq) return;
+      var q = function () { q.q.push(arguments); };
+      q.q = [];
+      w.oaiq = q;
 
-    var f = d.getElementsByTagName(s)[0];
-    f.parentNode.insertBefore(js, f);
-  })(window, document, "script",
-     "https://bzrcdn.openai.com/sdk/oaiq.min.js");
+      var js = d.createElement(s);
+      js.async = true;
+      js.src = u;
 
-  oaiq("init", {
-    pixelId: "714iCNe7W8KNFvPKUftRhr"
-  });
-</script>
-        {
-          headers: {
-            ...securityHeaders,
-            'Content-Type': 'text/html; charset=utf-8',
-            "Content-Security-Policy":
-  "default-src 'self'; " +
-  "script-src 'self' 'unsafe-inline' https://bzrcdn.openai.com; " +
-  "connect-src 'self' https://bzr.openai.com; " +
-  "style-src 'self' 'unsafe-inline'; " +
-  "img-src 'self' data:; " +
-  "frame-ancestors 'none'; " +
-  "base-uri 'none'"
-          }
-        }
-      );
+      var f = d.getElementsByTagName(s)[0];
+      f.parentNode.insertBefore(js, f);
+    })(window, document, "script",
+       "https://bzrcdn.openai.com/sdk/oaiq.min.js");
+
+    oaiq("init", {
+      pixelId: "714iCNe7W8KNFvPKUftRhr"
+    });
+  </script>
+
+  <style>
+    body{font:18px system-ui;background:#f3f5fc;color:#18213b;margin:0;padding:10vh 8vw}
+    main{max-width:720px;margin:auto;background:white;padding:48px;border-radius:20px}
+    h1{color:#5141df}
+    p{line-height:1.7}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>DataCooker</h1>
+    <h2>Dữ liệu Facebook trong Google Sheets</h2>
+    <p>Mở Sidebar DataCooker trong Google Sheets để kết nối tài khoản.</p>
+  </main>
+</body>
+</html>`,
+    {
+      headers: {
+        ...securityHeaders,
+        'Content-Type': 'text/html; charset=utf-8',
+        'Content-Security-Policy':
+          "default-src 'self'; " +
+          "script-src 'self' 'unsafe-inline' https://bzrcdn.openai.com; " +
+          "connect-src 'self' https://bzr.openai.com; " +
+          "style-src 'self' 'unsafe-inline'; " +
+          "img-src 'self' data:; " +
+          "frame-ancestors 'none'; " +
+          "base-uri 'none'"
+      }
     }
+  );
+}
     if (url.pathname !== '/run' || request.method !== 'POST') {
       return new Response('Not found', { status: 404 });
     }
