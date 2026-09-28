@@ -848,7 +848,7 @@ export default {
       headers: {
         ...securityHeaders,
         'Content-Type': 'text/html; charset=utf-8',
-        'Content-Security-Policy':
+        'Content-Security-Policy',
           "default-src 'self'; " +
           "script-src 'self' 'unsafe-inline' https://bzrcdn.openai.com; " +
           "connect-src 'self' https://bzr.openai.com; " +
