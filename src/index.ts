@@ -16,7 +16,7 @@ let workerId = 'cloudflare-browser-run';
 let encryptionKey = '';
 // Scheduled events get only a short grace period after the handler returns.
 // Finish or fail the job before Cloudflare terminates the invocation silently.
-const JOB_TIMEOUT_MS = 25_000;
+const JOB_TIMEOUT_MS = 55_000;
 const STALE_JOB_MS = 2 * 60_000;
 let bsIdMap = '{}';
 let browserBinding: BrowserWorker;
