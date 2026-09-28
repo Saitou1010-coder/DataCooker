@@ -161,6 +161,106 @@ async function handleFacebookProxy(request: Request) {
   }
 }
 
+function googleBinding(request: Request, state: string) {
+  if (!/^[a-f0-9]{64}$/.test(state)) return '';
+  const prefix = `dc_ga_${state}=`;
+  const value = (request.headers.get('cookie') || '')
+    .split(';')
+    .map(item => item.trim())
+    .find(item => item.startsWith(prefix))
+    ?.slice(prefix.length) || '';
+  return /^[a-f0-9]{64}$/.test(value) ? value : '';
+}
+
+function googleLanding(target: string, state: string, headers: Headers) {
+  const nonce = crypto.randomUUID().replaceAll('-', '');
+  const safeTarget = JSON.stringify(target).replaceAll('<', '\\u003c');
+  headers.set('Content-Type', 'text/html; charset=utf-8');
+  headers.set(
+    'Content-Security-Policy',
+    `default-src 'none'; script-src 'nonce-${nonce}'; connect-src 'self'; ` +
+      "style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'"
+  );
+  return new Response(
+    `<!doctype html><html lang="vi"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Kết nối Google Ads</title><style>body{font:16px system-ui;color:#17213d;padding:36px;line-height:1.6}h1{color:#5543dc}button{padding:12px;background:#5543dc;color:white;border:0;border-radius:8px;cursor:pointer}</style><h1>Kết nối Google Ads</h1><p id="status">Đang kiểm tra phiên trình duyệt...</p><button id="continue" hidden>Tiếp tục với Google</button><script nonce="${nonce}">const button=document.getElementById('continue');fetch('/auth/google/session-check?state=${state}',{credentials:'same-origin',cache:'no-store'}).then(r=>{if(!r.ok)throw Error();return r.json()}).then(s=>{if(!s.ok)throw Error();document.getElementById('status').textContent='Phiên đã sẵn sàng. Bấm nút bên dưới để cấp quyền Google Ads.';button.hidden=false;button.onclick=()=>location.replace(${safeTarget});}).catch(()=>{document.getElementById('status').textContent='Trình duyệt chưa lưu cookie cho datacooker.io.vn. Đóng cửa sổ này rồi tạo kết nối mới từ Google Sheets.';});</script></html>`,
+    { status: 200, headers }
+  );
+}
+
+async function handleGoogleProxy(request: Request) {
+  const url = new URL(request.url);
+  if (!url.pathname.startsWith('/auth/google/')) return null;
+  if (request.method !== 'GET') {
+    return new Response('Method not allowed', { status: 405, headers: securityHeaders });
+  }
+  if (url.origin !== SITE_ORIGIN) {
+    return new Response('Sai domain kết nối.', { status: 400, headers: securityHeaders });
+  }
+  if (url.pathname === '/auth/google/session-check') {
+    const state = url.searchParams.get('state') || '';
+    const ok = /^[a-f0-9]{64}$/.test(state) && !!googleBinding(request, state);
+    return Response.json({ ok }, { status: ok ? 200 : 400, headers: securityHeaders });
+  }
+
+  const routes: Record<string, string> = {
+    '/auth/google/launch': '/oauth/google/launch',
+    '/auth/google/callback': '/oauth/google/callback'
+  };
+  const route = routes[url.pathname];
+  if (!route) return new Response('Not found', { status: 404, headers: securityHeaders });
+
+  const target = new URL(SUPABASE_BACKEND + route);
+  const keys = url.pathname.endsWith('/launch')
+    ? ['ticket']
+    : ['state', 'code', 'error', 'error_description'];
+  for (const key of keys) {
+    if (url.searchParams.has(key)) target.searchParams.set(key, url.searchParams.get(key) || '');
+  }
+
+  const upstreamHeaders = new Headers();
+  const cookie = (request.headers.get('cookie') || '')
+    .split(';')
+    .map(item => item.trim())
+    .filter(item => /^dc_ga_[a-f0-9]{64}=[a-f0-9]{64}$/.test(item))
+    .join('; ');
+  if (cookie) upstreamHeaders.set('cookie', cookie);
+  const binding = googleBinding(request, url.searchParams.get('state') || '');
+  if (binding) upstreamHeaders.set('x-dc-oauth-binding', binding);
+
+  try {
+    const upstream = await fetch(target, { headers: upstreamHeaders, redirect: 'manual' });
+    const result = new Headers(securityHeaders);
+    const contentType = upstream.headers.get('content-type');
+    if (contentType) result.set('content-type', contentType);
+    const setCookie = upstream.headers.get('x-dc-oauth-set-cookie') ||
+      upstream.headers.get('set-cookie') || '';
+    if (/^dc_ga_[a-f0-9]{64}=(?:[a-f0-9]{64})?; Path=\/; HttpOnly; Secure; SameSite=Lax; Max-Age=(?:600|0)$/.test(setCookie)) {
+      result.set('set-cookie', setCookie);
+    }
+    const locationValue = upstream.headers.get('location');
+    if (locationValue) {
+      const location = new URL(locationValue);
+      if (location.origin !== 'https://accounts.google.com' ||
+          location.pathname !== '/o/oauth2/v2/auth') throw new Error('redirect');
+      const nextState = location.searchParams.get('state') || '';
+      if (!/^[a-f0-9]{64}$/.test(nextState)) throw new Error('state');
+      if (url.pathname.endsWith('/launch')) {
+        if (!result.get('set-cookie')?.startsWith(`dc_ga_${nextState}=`)) {
+          throw new Error('cookie');
+        }
+        return googleLanding(location.href, nextState, result);
+      }
+      result.set('location', location.href);
+    }
+    return new Response(upstream.body, { status: upstream.status, headers: result });
+  } catch {
+    return new Response('Kết nối Google Ads chưa hoàn tất. Quay lại Google Sheets và thử lại.', {
+      status: 502,
+      headers: securityHeaders
+    });
+  }
+}
+
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -688,6 +788,8 @@ export default {
   },
 
   async fetch(request: Request, env: Env) {
+    const googleResponse = await handleGoogleProxy(request);
+    if (googleResponse) return googleResponse;
     const facebookResponse = await handleFacebookProxy(request);
     if (facebookResponse) return facebookResponse;
 
