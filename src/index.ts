@@ -72,9 +72,14 @@ function facebookLanding(target: string, state: string, headers: Headers) {
   const nonce = crypto.randomUUID().replaceAll('-', '');
   headers.set('Content-Type', 'text/html; charset=utf-8');
   headers.set(
-    'Content-Security-Policy',
-    `default-src 'none'; script-src 'nonce-${nonce}'; connect-src 'self'; ` +
-      "style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'"
+  'Content-Security-Policy':
+  "default-src 'self'; " +
+  "script-src 'self' 'unsafe-inline' https://bzrcdn.openai.com; " +
+  "connect-src 'self' https://bzr.openai.com; " +
+  "style-src 'self' 'unsafe-inline'; " +
+  "img-src 'self' data:; " +
+  "frame-ancestors 'none'; " +
+  "base-uri 'none'"
   );
   const safeTarget = JSON.stringify(target).replaceAll('<', '\\u003c');
   return new Response(
